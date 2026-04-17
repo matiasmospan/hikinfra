@@ -1,6 +1,11 @@
 # HIK Infrastructure 2.0: Hyperledger Besu Layer
 
-Este componente representa la columna vertebral de integridad de **Human Is Kind (HIK)**. Es un clúster de Hyperledger Besu optimizado para **Performance Extrema** y **Alta Disponibilidad (HA)**, diseñado para correr en entornos Cloud-Native (Kubernetes).## 🚀 Características de la Solución- **Consenso QBFT:** Tolerancia a fallos bizantinos con finalidad inmediata (1-2s).- **Redundancia Multi-Zona:** Despliegue distribuido para evitar caídas por fallas de Datacenter.- **Auto-Deployment:** Job integrado para el despliegue automático del contrato `HIKRegistry`.- **Seguridad "Zero-Exposure":** Gestión de llaves privadas mediante Secrets de Kubernetes.
+Este componente representa la columna vertebral de integridad de **Human Is Kind (HIK)**. Es un clúster de Hyperledger Besu optimizado para **Performance Extrema** y **Alta Disponibilidad (HA)**, diseñado para correr en entornos Cloud-Native (Kubernetes).
+## 🚀 Características de la Solución
+- **Consenso QBFT:** Tolerancia a fallos bizantinos con finalidad inmediata (1-2s).
+- **Redundancia Multi-Zona:** Despliegue distribuido para evitar caídas por fallas de Datacenter.
+- **Auto-Deployment:** Job integrado para el despliegue automático del contrato `HIKRegistry`.
+- **Seguridad "Zero-Exposure":** Gestión de llaves privadas mediante Secrets de Kubernetes.
 
 ## Requisitos Previos
 1.  **Cluster de Kubernetes** (GKE recomendado para aprovechar discos SSD Premium).
@@ -11,10 +16,12 @@ Este componente representa la columna vertebral de integridad de **Human Is Kind
 ## Procedimiento de Despliegue
 ### Paso 1: Preparación de Secretos
 
-Para evitar el "loop" de configuración, creamos el secreto con la clave privada que tendrá los fondos iniciales definidos en el bloque génesis.```bash
+Para evitar el "loop" de configuración, creamos el secreto con la clave privada que tendrá los fondos iniciales definidos en el bloque génesis.
+```bash
 kubectl create secret generic besu-deployer-key --from-literal=key=0xTU_PRIVATE_KEY_AQUI
+```
 
-### Paso 2: Configuración del values.yaml
+### Paso 2: Configuración del `values.yaml`
 
 Asegúrate de que los nodeSelectors coincidan con tus nodos dedicados a Blockchain para evitar ruidos de performance con otros componentes (vLLM, etc).
 
