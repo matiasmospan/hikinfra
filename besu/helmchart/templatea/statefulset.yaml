@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "hik-besu.fullname" . }}-validator
+spec:
+  serviceName: besu-internal
+  replicas: {{ .Values.nodes.replicaCount }}
+  selector:
+    matchLabels:
+      app: besu-validator
+  template:
+    metadata:
+      labels:
+        app: besu-validator
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.nodes.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.nodes.tolerations | nindent 8 }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: ["besu-validator"]
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: besu
+        image: {{ .Values.nodes.image }}
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            besu --data-path=/opt/besu/data \
+            --genesis-file=/opt/besu/genesis.json \
+            --node-private-key-file=/opt/besu/keys/key \
+            --rpc-http-enabled --rpc-http-api=ETH,NET,QBFT \
+            --host-allowlist="*" --rpc-http-cors-origins="all"
+        volumeMounts:
+        - name: data
+          mountPath: /opt/besu/data
+        - name: genesis
+          mountPath: /opt/besu/genesis.json
+          subPath: genesis.json
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{ .Values.nodes.storage.class }}
+      resources:
+        requests:
+          storage: {{ .Values.nodes.storage.size }}

@@ -1,0 +1,40 @@
+{{- if .Values.contract.deploy }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "hik-besu.fullname" . }}-contract-deployer
+  annotations:
+    "helm.sh/hook": post-install # Se ejecuta después de subir Besu
+spec:
+  template:
+    spec:
+      containers:
+      - name: deployer
+        image: node:16-alpine
+        env:
+        - name: DEPLOYER_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: besu-deployer-key
+              key: key
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Script simple para desplegar usando ethers.js o web3.js
+            npm install ethers
+            cat <<EOF > deploy.js
+            const { ethers } = require("ethers");
+            async function main() {
+              const provider = new ethers.providers.JsonRpcProvider("http://besu-internal:8545");
+              const wallet = new ethers.Wallet("{{ .Values.contract.privateKey }}", provider);
+              const abi = [...]; // ABI de HIKRegistry
+              const bytecode = "0x..."; // Bytecode del contrato
+              const factory = new ethers.ContractFactory(abi, bytecode, wallet);
+              const contract = await factory.deploy();
+              console.log("HIK_CONTRACT_ADDRESS=" + contract.address);
+            }
+            main();
+            EOF
+            node deploy.js
+      restartPolicy: OnFailure
+{{- end }}
