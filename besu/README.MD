@@ -7,13 +7,13 @@ Este componente representa la columna vertebral de integridad de **Human Is Kind
 - **Auto-Deployment:** Job integrado para el despliegue automático del contrato `HIKRegistry`.
 - **Seguridad "Zero-Exposure":** Gestión de llaves privadas mediante Secrets de Kubernetes.
 
-## Requisitos Previos
+## 🛠️ Requisitos Previos
 1.  **Cluster de Kubernetes** (GKE recomendado para aprovechar discos SSD Premium).
 2.  **Helm 3.x** instalado.
 3.  **kubectl** configurado.
 4.  **Dirección y Clave Privada de Administrador:** Generada previamente para fondear el `genesis.json`.
 
-## Procedimiento de Despliegue
+## 📦 Procedimiento de Despliegue
 ### Paso 1: Preparación de Secretos
 
 Para evitar el "loop" de configuración, creamos el secreto con la clave privada que tendrá los fondos iniciales definidos en el bloque génesis.
@@ -45,7 +45,7 @@ contract:
 helm install hik-besu ./hik-besu-chart
 ```
 
-## Variables de Entorno (HIK Engine Integration)2
+## ⚙️ Variables de Entorno (HIK Engine Integration)2
 Una vez desplegado el clúster, el componente hik-core (Go) debe configurarse con las siguientes variables para conectar con esta capa:
 
 | Variable            | Descripción                       | Valor Sugerido             |
@@ -56,7 +56,7 @@ Una vez desplegado el clúster, el componente hik-core (Go) debe configurarse co
 |HIK_BATCH_SIZE       | Cantidad de evidencias por TX     | 10 (Performance Extrema)   |
 |HIK_GAS_LIMIT        | Límite de gas por anclaje         | 500000                     | 
 
-## Puntos Extras (Resiliencia Avanzada)
+## 💎 Puntos Extras (Resiliencia Avanzada)
 
 ### Liveness & Readiness Probes
 El chart incluye chequeos que no solo miran si el proceso corre, sino si el nodo está sincronizado:
@@ -71,7 +71,7 @@ Besu expone métricas en el puerto 9545. Se recomienda activar el PodMonitor par
 ### Backup de Estado
 Aunque el StatefulSet mantiene los discos, se recomienda configurar un VolumeSnapshot diario para los discos SSD de los validadores para recuperarse ante corrupciones lógicas de la DB de Besu.
 
-## Verificación del Despliegue
+## 🔍 Verificación del Despliegue
 Para confirmar que el contrato se desplegó correctamente y la red está activa:
 
 ```Bash
