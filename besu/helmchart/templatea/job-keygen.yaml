@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "hik-besu.fullname" . }}-keygen
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-10"
+spec:
+  template:
+    spec:
+      serviceAccountName: {{ include "hik-besu.fullname" . }}-keygen-sa
+      containers:
+      - name: keygen
+        image: alpine:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            apk add --no-cache curl openssl nodejs npm xxd
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl && mv kubectl /usr/local/bin/
+
+            if kubectl get secret besu-deployer-key; then exit 0; fi
+
+            PRIV_KEY=$(openssl ecparam -name secp256k1 -genkey -noout -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32)
+            npm install ethers@5.7.2
+            PUB_ADDR=$(node -e "const { ethers } = require('ethers'); const wallet = new ethers.Wallet('$PRIV_KEY'); console.log(wallet.address)")
+
+            echo "==============================================="
+            echo "HIK 2.0 IDENTIDAD GENERADA"
+            echo "ADDRESS: $PUB_ADDR"
+            echo "==============================================="
+
+            kubectl create secret generic besu-deployer-key \
+              --from-literal=key=0x$PRIV_KEY \
+              --from-literal=address=$PUB_ADDR
+      restartPolicy: OnFailure

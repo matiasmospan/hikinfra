@@ -8,5 +8,4 @@ spec:
   ports:
   - name: json-rpc
     port: 8545
-    targetPort: 8545
-  type: ClusterIP
+  sessionAffinity: ClientIP

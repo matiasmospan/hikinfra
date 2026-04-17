@@ -13,36 +13,68 @@ spec:
       labels:
         app: besu-validator
     spec:
+      {{- with .Values.nodes.nodeSelector }}
       nodeSelector:
-        {{- toYaml .Values.nodes.nodeSelector | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodes.tolerations }}
       tolerations:
-        {{- toYaml .Values.nodes.tolerations | nindent 8 }}
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-              - key: app
-                operator: In
-                values: ["besu-validator"]
-            topologyKey: "kubernetes.io/hostname"
-      containers:
-      - name: besu
-        image: {{ .Values.nodes.image }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      initContainers:
+      - name: init-genesis
+        image: alpine:latest
         command: ["/bin/sh", "-c"]
         args:
           - |
-            besu --data-path=/opt/besu/data \
-            --genesis-file=/opt/besu/genesis.json \
-            --node-private-key-file=/opt/besu/keys/key \
-            --rpc-http-enabled --rpc-http-api=ETH,NET,QBFT \
-            --host-allowlist="*" --rpc-http-cors-origins="all"
+            # Leer el address del secreto
+            PUB_ADDR=$(cat /etc/besu-identity/address)
+            # Reemplazar el placeholder en el genesis y guardarlo en el volumen compartido
+            sed "s/ADDRESS_PLACEHOLDER/$PUB_ADDR/g" /etc/genesis-template/genesis-template.json > /opt/besu/genesis.json
+            echo "Genesis configurado para el address: $PUB_ADDR"
+        volumeMounts:
+        - name: genesis-template
+          mountPath: /etc/genesis-template/
+        - name: identity
+          mountPath: /etc/besu-identity/
+        - name: genesis-fixed
+          mountPath: /opt/besu/
+
+      containers:
+      - name: besu
+        image: {{ .Values.nodes.image }}
+        env:
+          - name: BESU_NODE_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: besu-deployer-key
+                key: key
+        args: [
+          "--genesis-file=/opt/besu/genesis.json",
+          "--data-path=/opt/besu/data",
+          "--rpc-http-enabled",
+          "--rpc-http-api=ETH,NET,QBFT",
+          "--host-allowlist=*",
+          "--rpc-http-cors-origins=all"
+        ]
         volumeMounts:
         - name: data
           mountPath: /opt/besu/data
-        - name: genesis
+        - name: genesis-fixed
           mountPath: /opt/besu/genesis.json
           subPath: genesis.json
+
+      volumes:
+      - name: genesis-template
+        configMap:
+          name: {{ include "hik-besu.fullname" . }}-genesis
+      - name: identity
+        secret:
+          secretName: besu-deployer-key
+      - name: genesis-fixed
+        emptyDir: {} # Volumen efímero para el archivo procesado
+
   volumeClaimTemplates:
   - metadata:
       name: data

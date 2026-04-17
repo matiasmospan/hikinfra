@@ -3,25 +3,14 @@ kind: ConfigMap
 metadata:
   name: {{ include "hik-besu.fullname" . }}-genesis
 data:
-  genesis.json: |-
+  genesis-template.json: |-
     {
       "config": {
         "chainId": {{ .Values.global.networkId }},
-        "qbft": {
-          "blockperiodseconds": {{ .Values.nodes.blockTime }},
-          "epochlength": 30000,
-          "requesttimeoutseconds": 4
-        }
+        "qbft": { "blockperiodseconds": {{ .Values.nodes.blockTime }}, "epochlength": 30000 }
       },
-      "nonce": "0x0",
-      "timestamp": "0x58e81078",
       "gasLimit": "0x1fffffffffffff",
-      "difficulty": "0x1",
-      "mixHash": "0x6374616c69737420636f6e70656e736174696f6e20706c616e65742032303232",
-      "coinbase": "0x0000000000000000000000000000000000000000",
       "alloc": {
-        "{{ .Values.contract.deployerAddress }}": {
-          "balance": "0x200000000000000000000000000000000000000000000000000000000000000"
-        }
+        "ADDRESS_PLACEHOLDER": { "balance": "0xAD78EBC5AC6200000" } 
       }
     }

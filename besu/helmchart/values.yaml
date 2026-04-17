@@ -1,29 +1,21 @@
 global:
   networkId: 1337
-  consensus: "qbft"
 
 nodes:
-  nodeSelector: 
-    cloud.google.com/gke-nodepool: blockchain-pool
-  tolerations:
-    - key: "dedicated"
-      operator: "Equal"
-      value: "besu"
-      effect: "NoSchedule"
   replicaCount: 3
-  image: hyperledger/besu:latest
-  resources:
-    requests:
-      cpu: "2"
-      memory: "4Gi"
-    limits:
-      cpu: "4"
-      memory: "8Gi"
+  image: hyperledger/besu:23.4.0
+  blockTime: 2
   storage:
     size: 50Gi
-    class: premium-rwo # SSD para máximo IOPS
+    class: premium-rwo
+  # Opcionales: Si se comentan o borran, Besu corre en cualquier nodo disponible
+  # nodeSelector:
+  #   dedicated: blockchain
+  # tolerations:
+  #   - key: "dedicated"
+  #     operator: "Equal"
+  #     value: "besu"
+  #     effect: "NoSchedule"
 
 contract:
   deploy: true
-  image: ethereum/solc:stable # O una imagen con Hardhat/Truffle
-  privateKey: "0x..." # Llave con fondos iniciales en el genesis
