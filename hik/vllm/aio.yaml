@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-server
+  namespace: hik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      nodeSelector:
+        nodetype: ollama
+      tolerations:
+      - key: "nodetype"
+        operator: "Equal"
+        value: "ollama"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: vllm-container
+        image: vllm/vllm-openai-cpu:latest-x86_64
+        env:
+        # Forzamos el dispositivo CPU por variable de entorno
+        - name: VLLM_TARGET_DEVICE
+          value: "cpu"
+        # Ajustamos hilos para tus 3 CPUs
+        - name: OMP_NUM_THREADS
+          value: "3"
+        - name: VLLM_CPU_OMP_THREADS_BIND
+          value: "all"
+        
+        # NUEVA ESTRUCTURA DE COMANDOS
+        command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
+        args:
+        - "--model"
+        - "Qwen/Qwen2.5-3B-Instruct" # Forzamos el flag
+        - "--dtype"
+        - "float32"
+        - "--max-model-len"
+        - "1024" # Bajamos esto para ahorrar más RAM aún
+        - "--gpu-memory-utilization"
+        - "0.4"
+        - "--port"
+        - "8000"
+        
+        # IMPORTANTE: vLLM necesita acceso a memoria compartida
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "3"
+          limits:
+            memory: "12Gi"
+            cpu: "3"
+
+      volumes:
+      # Definimos el volumen de memoria compartida
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service
+  namespace: hik
+spec:
+  selector:
+    app: vllm
+  ports:
+  - port: 8000
+    targetPort: 8000

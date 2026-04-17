@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: hik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      nodeSelector:
+        nodetype: ollama
+      tolerations:
+      - key: "nodetype"
+        operator: "Equal"
+        value: "ollama"
+        effect: "NoSchedule"
+      
+      # MODIFICACIÓN 1: InitContainer ultra-light
+      initContainers:
+      - name: model-puller
+        image: ollama/ollama:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # 1. Iniciar servidor en segundo plano
+            ollama serve &
+            SERVER_PID=$!
+            
+            # 2. Esperar a que el socket responda (reemplazo de sleep ciego)
+            echo "Waiting for Ollama server..."
+            until ollama list >/dev/null 2>&1; do sleep 1; done
+            
+            # 3. Descargar el modelo
+            echo "Pulling model qwen3.5:4b..."
+            ollama pull qwen2.5:0.5b
+            
+            # 4. FORZAR CARGA EN RAM
+            # 'ollama run' sin prompt simplemente carga el modelo y sale 
+            # si logramos que procese un token, garantizamos el 'alloc' de memoria.
+            echo "Forcing model allocation into RAM..."
+            echo "hi" | ollama run qwen2.5:0.5b
+            
+            echo "Model successfully loaded in RAM. Cleaning up init process."
+            kill $SERVER_PID
+            # Esperar a que el proceso realmente muera para liberar el lock de memoria
+            wait $SERVER_PID
+        env:
+        - name: OLLAMA_MODELS
+          value: /models
+        volumeMounts:
+        - name: model-cache
+          mountPath: /models
+
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        env:
+        - name: OLLAMA_MODELS
+          value: /models
+        - name: OLLAMA_KEEP_ALIVE
+          value: "-1"
+        - name: OLLAMA_MMAP
+          value: "true"
+        # MODIFICACIÓN 2: Evitar colisión de hilos en e2-standard-4 (4 vCPUs)
+        # Dejamos 1 hilo libre para el sistema operativo
+        - name: OLLAMA_NUM_PARALLEL
+          value: "1"
+        
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2"       # Bajamos a 2 para asegurar que el scheduler lo ubique fácil
+          limits:
+            memory: "10Gi"  # Subimos a 10Gi para dar margen al KV Cache (5.4 + margen)
+            cpu: "3"
+
+        # MODIFICACIÓN 3: Probes realistas para carga en CPU
+        readinessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 30 # Le damos 30s de gracia para que mueva los gigas a RAM
+          periodSeconds: 10
+        
+        volumeMounts:
+        - name: model-cache
+          mountPath: /models
+
+      volumes:
+      - name: model-cache
+        # IMPORTANTE: emptyDir en GKE usa el SSD local del nodo. 
+        # Esto es lo que permite que OLLAMA_MMAP=true funcione.
+        emptyDir: {}

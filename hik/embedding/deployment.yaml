@@ -1,0 +1,83 @@
+# HIK v4 — Embedding Sidecar (Python/FastAPI) — Deployment
+#
+# Implements KMIR L2: cosine similarity classification against
+# pre-computed EU AI Act violation centroids (all-MiniLM-L6-v2).
+#
+# The Go hik-sidecar calls this synchronously via HIK_EMBEDDING_ENDPOINT.
+# Target latency: <15ms on CPU per classification.
+# If this service is unreachable, the Go client degrades to L1-only mode
+# gracefully (no crash, logged as warning).
+#
+# Image: build from hik-core/cmd/embedding-sidecar/
+#   docker build -f hik-core/cmd/embedding-sidecar/Dockerfile \
+#     -t gcr.io/matech-476914/hik-embedding-sidecar:latest \
+#     hik-core/cmd/embedding-sidecar/
+#
+# NOTE: First startup downloads all-MiniLM-L6-v2 (~90MB) from HuggingFace.
+# Use a PVC or bake the model into the image for production.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-sidecar
+  namespace: hik
+  labels:
+    app: embedding-sidecar
+    component: kmir-l2
+    hik-version: "4.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embedding-sidecar
+  template:
+    metadata:
+      labels:
+        app: embedding-sidecar
+        component: kmir-l2
+    spec:
+      containers:
+      - name: embedding-sidecar
+        image: us-east1-docker.pkg.dev/matech-476914/hik-repo/humaniskind:pyv4.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+        env:
+        - name: HF_HOME
+          value: /model-cache
+        # Disable HuggingFace telemetry in production
+        - name: TRANSFORMERS_OFFLINE
+          value: "0"   # Set to "1" if model is baked into image or mounted via PVC
+        volumeMounts:
+        - name: model-cache
+          mountPath: /model-cache
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30   # Model load takes ~10–20s on cold start
+          periodSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+      volumes:
+      - name: model-cache
+        # Use emptyDir for dev/demo. Replace with PVC in production to avoid
+        # re-downloading all-MiniLM-L6-v2 (~90MB) on every pod restart:
+        persistentVolumeClaim:
+          claimName: embedding-model-cache
+

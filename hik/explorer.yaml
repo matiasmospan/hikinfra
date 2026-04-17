@@ -1,0 +1,246 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hik-explorer-html
+  namespace: hik
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>HIK Governance Explorer - Registry V2</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-slate-900 text-slate-100 min-h-screen p-8">
+
+        <div class="max-w-3xl mx-auto">
+            <header class="mb-8 border-b border-slate-700 pb-4 flex justify-between items-end">
+                <div>
+                    <h1 class="text-2xl font-bold text-blue-400">HIK Governance Explorer</h1>
+                    <p class="text-slate-400 text-sm">Registry V2 Protocol - Auditoría en Tiempo Real</p>
+                </div>
+                <div id="connectionStatus" class="text-[10px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-slate-500 uppercase font-mono">
+                    RPC: Conectando...
+                </div>
+            </header>
+
+            <div class="bg-slate-800 p-6 rounded-xl shadow-xl border border-slate-700">
+                <label class="block text-xs font-bold uppercase text-slate-500 mb-2">Merkle Root / Manifest Hash</label>
+                <div class="flex gap-2">
+                    <input type="text" id="hashId" placeholder="0x..." 
+                        class="flex-1 bg-slate-900 border border-slate-700 rounded p-2 text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors">
+                    <button onclick="checkBlockchain()" id="btnSearch"
+                            class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold transition-all disabled:opacity-50 flex items-center gap-2">
+                        <span>Verificar</span>
+                    </button>
+                </div>
+                <div id="statusMsg" class="text-xs mt-2 text-blue-400 italic hidden animate-pulse">Consultando HIK Registry...</div>
+            </div>
+
+            <div id="result" class="mt-8 bg-slate-800 rounded-xl border border-blue-500/30 overflow-hidden hidden">
+                <div class="bg-blue-500/10 p-4 border-b border-blue-500/20">
+                    <h2 class="text-sm font-bold uppercase text-blue-400 tracking-wider">Certificado de Anclaje</h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <div>
+                                <p class="text-xs text-slate-500 uppercase font-bold">Fecha de Registro (UTC)</p>
+                                <p id="resTime" class="text-sm font-mono text-slate-200">-</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-slate-500 uppercase font-bold">Firmante Autorizado</p>
+                                <p id="resSigner" class="text-xs font-mono text-blue-300 truncate">-</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/50 p-4 rounded-lg border border-slate-700 grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-[10px] text-slate-500 uppercase font-bold">Policy Ver.</p>
+                                <p id="resPolicy" class="text-lg font-bold text-slate-200">-</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-slate-500 uppercase font-bold">Receipts</p>
+                                <p id="resReceipts" class="text-lg font-bold text-slate-200">-</p>
+                            </div>
+                            <div class="col-span-2 border-t border-slate-700 pt-2">
+                                <p class="text-[10px] text-slate-500 uppercase font-bold">Violaciones Detectadas</p>
+                                <p id="resViolations" class="text-lg font-bold text-red-400">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="resIpfsContainer" class="mt-6 p-4 bg-slate-900 rounded border border-slate-700">
+                        <p class="text-xs text-slate-500 uppercase font-bold mb-2">Evidencia IPFS (Payload)</p>
+                        <a id="resIpfsLink" href="#" target="_blank" class="text-blue-400 underline truncate block text-xs font-mono break-all">
+                            -
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const ADDR = "0x87F1FB34BdceB9f68462EA3eC0D94d719fe9b776";
+            
+            // Nueva ABI adaptada al contrato HIKRegistry
+            const ABI = [
+                "function getBatch(bytes32 merkleRoot) external view returns (address signer, uint256 timestamp, string memory ipfsUri, uint32 policyVersion, uint16 violationCount, uint32 receiptCount)",
+                "function isAnchored(bytes32 merkleRoot) external view returns (bool)"
+            ];
+
+            // Inicializar Provider
+            const rpcUrl = window.location.origin + "/rpc";
+            const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+
+            async function checkBlockchain() {
+                const hashId = document.getElementById('hashId').value.trim();
+                const btn = document.getElementById('btnSearch');
+                const statusMsg = document.getElementById('statusMsg');
+                const resultDiv = document.getElementById('result');
+
+                if (!hashId.startsWith('0x') || hashId.length !== 66) { 
+                    alert("Por favor, ingresa un bytes32 válido (0x + 64 caracteres hex)"); 
+                    return; 
+                }
+
+                btn.disabled = true;
+                statusMsg.classList.remove('hidden');
+                resultDiv.classList.add('hidden');
+
+                const contract = new ethers.Contract(ADDR, ABI, provider);
+
+                try {
+                    // Primero verificamos si existe para evitar que la llamada falle
+                    const anchored = await contract.isAnchored(hashId);
+                    
+                    if (!anchored) {
+                        alert("El Hash no se encuentra registrado en el Registry V2.");
+                        return;
+                    }
+
+                    // Llamada a getBatch (obtiene el struct BatchRecord)
+                    const batch = await contract.getBatch(hashId);
+                    
+                    // Mapeo de resultados
+                    document.getElementById('resTime').innerText = new Date(batch.timestamp * 1000).toUTCString();
+                    document.getElementById('resSigner').innerText = batch.signer;
+                    document.getElementById('resPolicy').innerText = batch.policyVersion;
+                    document.getElementById('resReceipts').innerText = batch.receiptCount;
+                    document.getElementById('resViolations').innerText = batch.violationCount;
+
+                    // Color de alerta para violaciones
+                    const vCount = batch.violationCount;
+                    document.getElementById('resViolations').className = vCount > 0 
+                        ? "text-lg font-bold text-red-400" 
+                        : "text-lg font-bold text-green-400";
+
+                    // IPFS Link
+                    const cid = batch.ipfsUri.replace("ipfs://", "");
+                    const url = window.location.origin + "/ipfs/" + cid;
+                    const linkElem = document.getElementById('resIpfsLink');
+                    linkElem.href = url;
+                    linkElem.innerText = cid;
+
+                    resultDiv.classList.remove('hidden');
+
+                } catch (e) {
+                    console.error("RPC Error:", e);
+                    alert("Error al consultar el contrato: " + (e.reason || e.message));
+                } finally {
+                    btn.disabled = false;
+                    statusMsg.classList.add('hidden');
+                }
+            }
+
+            // Check de conexión inicial
+            provider.getBlockNumber()
+                .then(() => document.getElementById('connectionStatus').innerText = "RPC: Online")
+                .catch(() => document.getElementById('connectionStatus').innerText = "RPC: Offline");
+        </script>
+    </body>
+    </html>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hik-explorer-config
+  namespace: hik
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name localhost;
+
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+
+        # Proxy hacia el Gateway de IPFS (Kubo)
+        location /ipfs/ {
+            proxy_pass http://ipfs-svc:8080/ipfs/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        # El Proxy hacia la Blockchain (Internal K8s DNS)
+        location /rpc {
+            proxy_pass http://besu-svc:8545/; 
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-explorer
+  namespace: hik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: explorer
+  template:
+    metadata:
+      labels:
+        app: explorer
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html/index.html
+          subPath: index.html
+        - name: config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+      volumes:
+      - name: html
+        configMap:
+          name: hik-explorer-html
+      - name: config
+        configMap:
+          name: hik-explorer-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hik-explorer-svc
+  namespace: hik
+spec:
+  type: LoadBalancer # O NodePort si estás en una red interna
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: explorer

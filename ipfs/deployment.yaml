@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ipfs-node
+  namespace: hik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ipfs-node
+  template:
+    metadata:
+      labels:
+        app: ipfs-node
+    spec:
+      containers:
+      - name: kubo
+        image: ipfs/kubo:latest
+        ports:
+        - containerPort: 5001
+        - containerPort: 8080
+        env:
+        - name: IPFS_PROFILE
+          value: server
+        volumeMounts:
+        - name: ipfs-data
+          mountPath: /data/ipfs
+      volumes:
+      - name: ipfs-data
+        persistentVolumeClaim:
+          claimName: ipfs-storage

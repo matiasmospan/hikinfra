@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: besu-genesis
+  namespace: hik
+data:
+  genesis.json: |
+    {
+      "config": {
+        "chainId": 1337,
+        "clique": {
+          "blockperiodseconds": 5,
+          "epochlength": 30000
+        },
+        "homesteadBlock": 0,
+        "eip150Block": 0,
+        "eip155Block": 0,
+        "eip158Block": 0,
+        "byzantiumBlock": 0,
+        "constantinopleBlock": 0,
+        "petersburgBlock": 0,
+        "istanbulBlock": 0,
+        "berlinBlock": 0,
+        "londonBlock": 0,
+        "shanghaiBlock": 0
+      },
+      "extraData": "0x0000000000000000000000000000000000000000000000000000000000000000dcf766cecab4ccbd593672879998ec401c89460b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "gasLimit": "0x1fffffffffffff",
+      "difficulty": "0x1",
+      "alloc": {
+        "dcf766cecab4ccbd593672879998ec401c89460b": {
+          "balance": "0x21e19e0c9bab2400000"
+        }
+      }
+    }

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: besu
+  namespace: hik
+spec:
+  serviceName: "besu"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: besu
+  template:
+    metadata:
+      labels:
+        app: besu
+    spec:
+      containers:
+      - name: besu
+        image: hyperledger/besu:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            besu --data-path=/var/lib/besu \
+            --genesis-file=/etc/besu/genesis.json \
+            --rpc-http-enabled \
+            --rpc-http-host=0.0.0.0 \
+            --rpc-http-cors-origins="*" \
+            --rpc-http-api=ETH,NET,WEB3,ADMIN,DEBUG \
+            --host-allowlist="*" \
+            --network-id=1337 \
+            --min-gas-price=0
+        ports:
+        - containerPort: 8545
+          name: json-rpc
+        volumeMounts:
+        - name: besu-data
+          mountPath: /var/lib/besu
+        - name: genesis-config
+          mountPath: /etc/besu
+        - name: node-key-volume
+          mountPath: /var/lib/besu/key
+          subPath: key
+      volumes:
+      - name: node-key-volume
+        secret:
+          secretName: besu-node-key
+      - name: genesis-config
+        configMap:
+          name: besu-genesis
+  volumeClaimTemplates:
+  - metadata:
+      name: besu-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "standard" 
+      resources:
+        requests:
+          storage: 5Gi

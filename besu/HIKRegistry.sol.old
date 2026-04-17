@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract HIKRegistry {
+    // Almacenar solo el timestamp y un booleano es MUCHO más barato.
+    // El IPFS hash lo podés reconstruir desde el evento.
+    mapping(bytes32 => uint256) public anchors;
+    
+    event AssetRegistered(bytes32 indexed id, string ipfsUri);
+
+    function registerAsset(bytes32 _id, string calldata _ipfsUri) external {
+        // Al NO guardar el string en el storage del contrato, 
+        // ahorramos ~80,000 de gas. El dato queda en los Logs (Eventos).
+        anchors[_id] = block.timestamp;
+        emit AssetRegistered(_id, _ipfsUri);
+    }
+
+    function isRegistered(bytes32 _id) external view returns (bool) {
+        return anchors[_id] > 0;
+    }
+}

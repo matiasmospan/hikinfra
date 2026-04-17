@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-governance-engine
+  namespace: hik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hik-engine
+  template:
+    metadata:
+      labels:
+        app: hik-engine
+    spec:
+      # Bloque de seguridad: No arranca si Besu no responde en el puerto 8545
+      initContainers:
+      - name: wait-for-besu
+        image: busybox:latest
+        command: ['sh', '-c', 'until nc -z besu-svc 8545; do echo "Esperando a Hyperledger Besu..."; sleep 10; done;']
+      containers:
+      - name: hik-main
+        image: us-east1-docker.pkg.dev/matech-476914/hik-repo/humaniskind:v3.0
+        imagePullPolicy: Always
+        env:
+        - name: HIK_IPFS_KUBO_URL
+          value: "http://ipfs-svc:5001"
+        - name: HIK_ENABLE_IPFS
+          value: "true"
+        - name: HIK_IPFS_STRATEGY
+          value: "sync" # Forzamos a que espere a IPFS antes de mandar a Besu
+        - name: HIK_RPC_URL
+          value: "http://besu-svc:8545"
+        - name: HIK_CHAIN_ID
+          value: "1337"
+        - name: HIK_PORT
+          value: "8080"
+        - name: HIK_GAS_PRICE
+          value: "1000000000"
+        - name: HIK_GAS_LIMIT
+          value: "300000"
+        - name: HIK_EVM_GAS_LIMIT
+          value: "300000"
+        - name: HIK_ANCHOR_GAS_LIMIT
+          value: "300000"
+        - name: HIK_LOG_LEVEL
+          value: "debug"
+        - name: HIK_DEBUG_EVM
+          value: "true"
+        - name: HIK_TELEMETRY_PUBKEY
+          value: "f478c4fc9b926bb40164b8a51b718c672c3a8d63f74bc21fb535f55ae34126e8"
+        - name: HIK_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hik-wallet-keys
+              key: WALLET_PRIVATE_KEY
+        - name: HIK_CONTRACT_ADDRESS
+          # value: "0x1F0007D79583Abf2C6405668F9c91fE26dc1DeF6"
+          value: "0xE2C57bcF2fACdB9381aD2c0fACb19dEEc8a65cF8"

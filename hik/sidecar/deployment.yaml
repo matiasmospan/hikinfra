@@ -1,0 +1,52 @@
+# HIK v4 — hik-sidecar Deployment (updated)
+#
+# Changes from previous version:
+#   - Removed slm-auditor (Ollama) container from this pod
+#   - Ollama now lives in ollama-deployment.yaml (independent scaling)
+#   - hik-sidecar pod is now ~256Mi, HPA-eligible
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-sidecar
+  namespace: hik
+  labels:
+    app: hik-sidecar
+    hik-version: "4.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hik-sidecar
+  template:
+    metadata:
+      labels:
+        app: hik-sidecar
+    spec:
+      containers:
+      - name: sidecar
+        image: us-east1-docker.pkg.dev/matech-476914/hik-repo/humaniskind:gov4.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - secretRef:
+            name: hik-wallet-keys
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"

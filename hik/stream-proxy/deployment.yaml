@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-stream-proxy
+  namespace: hik
+  labels:
+    app: hik-stream-proxy
+    hik-version: "4.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hik-stream-proxy
+  template:
+    metadata:
+      labels:
+        app: hik-stream-proxy
+    spec:
+      containers:
+      - name: stream-proxy
+        image: us-east1-docker.pkg.dev/matech-476914/hik-repo/humaniskind-sp:gov4.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8090
+        - containerPort: 1935
+        env:
+          - name: HIK_STREAM_PROXY_PORT
+            value: "8090"
+          - name: HIK_C2PA_PRIVATE_KEY_PATH
+            value: "/etc/hik/certs/c2pa_private.pem"
+          - name: HIK_C2PA_CERT_CHAIN_PATH
+            value: "/etc/hik/certs/c2pa_chain.pem"
+          - name: HIK_RTMP_DESTINATION
+            value: "rtmp://a.rtmp.youtube.com/live2"
+          - name: HIK_RTMP_STREAM_KEY
+            value: "hq4d-t8y7-xqs0-1r7k-dfp3"
+
+        volumeMounts:
+          - name: certs-volume
+            mountPath: "/etc/hik/certs"
+            readOnly: true
+        envFrom:
+        - secretRef:
+            name: hik-wallet-keys
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8090
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+      volumes:
+        - name: certs-volume
+          secret:
+            secretName: hik-c2pa-certs
