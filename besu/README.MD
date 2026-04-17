@@ -45,7 +45,7 @@ contract:
 helm install hik-besu ./hik-besu-chart
 ```
 
-## ⚙️ Variables de Entorno (HIK Engine Integration)2
+## ⚙️ Variables de Entorno (HIK Engine Integration)
 Una vez desplegado el clúster, el componente hik-core (Go) debe configurarse con las siguientes variables para conectar con esta capa:
 
 | Variable            | Descripción                       | Valor Sugerido             |
