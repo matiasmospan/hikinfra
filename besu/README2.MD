@@ -58,7 +58,7 @@ graph TD;
 |Keygen Engine|Job (pre-install)|Script en Node.js/Alpine que genera la topología de red. Se auto-elimina al finalizar para no dejar huellas de logs sensibles.|
 |Validators|StatefulSet|El "Core" de la red. Ejecuta Besu con runAsUser: 1000. Utiliza podAntiAffinity para garantizar dispersión geográfica (Multi-AZ).|
 |RPC Gateway|Deployment|Punto de entrada para consultas. Posee una NetworkPolicy específica que solo permite tráfico desde el Middleware autorizado.|
-Identities|Secret|Contiene los archivos key (llave privada del nodo) y el static-nodes.json. Protegido por cifrado en reposo del clúster (KMS).|
+|Identities|Secret|Contiene los archivos key (llave privada del nodo) y el static-nodes.json. Protegido por cifrado en reposo del clúster (KMS).|
 |Network Shield|NetworkPolicy|Implementa el aislamiento. Cierra todos los puertos excepto el 30303 (P2P) entre validadores y el 8545 (RPC) para la aplicación.|
 |Discovery Service|Service (Headless)|Permite que los nodos se encuentren por nombre DNS (validator-0.besu-internal) incluso antes de estar en estado "Ready".|
 
@@ -66,8 +66,6 @@ Identities|Secret|Contiene los archivos key (llave privada del nodo) y el static
 * `genesis.json`: Define la "Constitución" de la blockchain (ChainID, algoritmo QBFT, cuentas pre-fondeadas).
 
 * `static-nodes.json`: El mapa de confianza inicial. Sin este archivo, los nodos no saben a quién llamar para armar la red.
-
-* `security-context.yaml`: Define que el sistema de archivos sea de solo lectura (readOnlyRootFilesystem: true) excepto en la carpeta de datos.
 
 ---
 
@@ -98,6 +96,8 @@ El chart es agnóstico al proveedor de nube. Si se dejan los valores por defecto
 |storage.size|Tamaño del disco por nodo validador.|50Gi|
 |resources.limits.memory|Límite de RAM por nodo (60% para JVM).|4Gi|
 |network.rpcAccessLabel|Label requerido para que otros pods hablen con la red.|access-rpc: "true"|
+|contract.abi|Interfaz JSON del contrato Registry.|Requerido para que la DApp interactúe.|
+|contract.bytecode|Código compilado (0x...) del contrato.|Requerido para el despliegue automático.|
 
 ---
 
