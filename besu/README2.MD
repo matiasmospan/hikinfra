@@ -25,7 +25,7 @@ La solución se despliega de forma distribuida para garantizar que no exista un 
 * **Anti-Affinity:** Reglas "soft" que obligan a Kubernetes a colocar cada nodo en un servidor físico y zona de disponibilidad diferente.
 * **Headless Service:** Permite el descubrimiento DNS entre nodos incluso antes de que los pods reporten estado "Ready" (`publishNotReadyAddresses: true`).
 
-graph TD
+graph TD;
     subgraph "Aprovisionamiento (Hooks)"
         RBAC[RBAC: Roles/SA] -- Permite --> Keygen[Job: Keygen]
         Keygen -- Genera y Guarda --> Secret[Secret: Identities/Genesis]
