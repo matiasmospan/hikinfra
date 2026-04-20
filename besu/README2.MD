@@ -24,7 +24,7 @@ La solución se despliega de forma distribuida para garantizar que no exista un 
 * **StatefulSet:** Garantiza identidades DNS fijas (`validator-0`, `validator-1`, etc.) esenciales para el descubrimiento P2P.
 * **Anti-Affinity:** Reglas "soft" que obligan a Kubernetes a colocar cada nodo en un servidor físico y zona de disponibilidad diferente.
 * **Headless Service:** Permite el descubrimiento DNS entre nodos incluso antes de que los pods reporten estado "Ready" (`publishNotReadyAddresses: true`).
-
+```mermaid
 graph TD;
     subgraph "Aprovisionamiento (Hooks)"
         RBAC[RBAC: Roles/SA] -- Permite --> Keygen[Job: Keygen]
@@ -49,7 +49,7 @@ graph TD;
     style Secret fill:#f9f,stroke:#333,stroke-width:2px
     style RBAC fill:#fff4dd,stroke:#d4a017,stroke-width:2px
     style NetPol fill:#ffcccb,stroke:#a30000,stroke-width:2px
-
+```
 ### Detalle de Componentes y su Finalidad
 
 |Componente|Recurso K8s|Finalidad Técnica y Seguridad|
