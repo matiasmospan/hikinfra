@@ -90,7 +90,7 @@ El chart es agnóstico al proveedor de nube. Si se dejan los valores por defecto
 
 |Variable|Descripción|Valor Recomendado|
 |---|---|---|
-|nodes.image|Imagen oficial de Besu optimizada.|hyperledger/besu:latest|
+|nodes.image|Imagen oficial de Besu optimizada.|hyperledger/besu:24.3.0|
 |nodes.replicas|Cantidad de nodos validadores (mínimo 3 para QBFT).|3|
 |storage.className|Clase de almacenamiento (vacío para default).|"" o "premium-rwo"|
 |storage.size|Tamaño del disco por nodo validador.|50Gi|
