@@ -46,9 +46,9 @@ graph TD;
         NetPol[Network Policies] -.->|Filtra Tráfico| LayerAcceso[Capa Aplicativa]
     end
 
-    style Secret fill:#f9f,stroke:#333,stroke-width:2px
-    style RBAC fill:#fff4dd,stroke:#d4a017,stroke-width:2px
-    style NetPol fill:#ffcccb,stroke:#a30000,stroke-width:2px
+    style Secret fill:#732673,stroke:#333,stroke-width:2px
+    style RBAC fill:#4d4d00,stroke:#d4a017,stroke-width:2px
+    style NetPol fill:#800000,stroke:#a30000,stroke-width:2px
 ```
 ### Detalle de Componentes y su Finalidad
 
