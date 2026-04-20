@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: besu-internal  # (O el nombre que le hayas puesto a tu headless service)
+  namespace: {{ .Release.Namespace }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true  # <--- ESTA ES LA LLAVE MAESTRA
+  ports:
+    - name: p2p-tcp
+      port: 30303
+      protocol: TCP
+    - name: p2p-udp
+      port: 30303
+      protocol: UDP
+  selector:
+    app: besu-validator

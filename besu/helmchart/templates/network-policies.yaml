@@ -1,0 +1,86 @@
+# 1. Política para los Validadores (Aislamiento estricto)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hik-besu.fullname" . }}-validators
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: besu-validator
+  policyTypes:
+    - Ingress
+  ingress:
+    # Permitir P2P entre validadores y desde el RPC
+    - from:
+        - podSelector:
+            matchLabels:
+              app: besu-validator
+        - podSelector:
+            matchLabels:
+              app: besu-rpc
+      ports:
+        - protocol: TCP
+          port: 30303
+        - protocol: UDP
+          port: 30303
+---
+# 2. Política para el Nodo RPC
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hik-besu.fullname" . }}-rpc
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: besu-rpc
+  policyTypes:
+    - Ingress
+  ingress:
+    # 1. Tráfico P2P desde validadores (necesario para sincronía)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: besu-validator
+      ports:
+        - protocol: TCP
+          port: 30303
+        - protocol: UDP
+          port: 30303
+    
+    # 2. Tráfico JSON-RPC (8545) restringido por LABEL
+    # Solo pods con 'access-rpc: "true"' pueden entrar aquí
+    - from:
+        - podSelector:
+            matchLabels:
+              access-rpc: "true"
+      ports:
+        - protocol: TCP
+          port: 8545
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hik-besu.fullname" . }}-allow-dns
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      # Se aplica a todos tus componentes de Besu
+      app.kubernetes.io/part-of: {{ include "hik-besu.name" . }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

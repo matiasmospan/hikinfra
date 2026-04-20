@@ -1,0 +1,43 @@
+{{- $jobs := list "keygen" "deployer" }}
+{{- range $job := $jobs }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hik-besu-{{ $job }}-sa
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hik-besu-{{ $job }}-role
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+rules:
+- apiGroups: [""]
+  # El keygen necesita secrets y configmaps, el deployer solo configmaps
+  resources: {{ if eq $job "keygen" }} ["secrets", "configmaps"] {{ else }} ["configmaps"] {{ end }}
+  verbs: ["get", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hik-besu-{{ $job }}-binding
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+subjects:
+- kind: ServiceAccount
+  name: hik-besu-{{ $job }}-sa
+  namespace: {{ $.Release.Namespace }}
+roleRef:
+  kind: Role
+  name: hik-besu-{{ $job }}-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

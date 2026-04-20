@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hik-contract-artifacts
+data:
+  abi.json: {{ .Values.contract.abi | quote }}
+  bytecode.txt: {{ .Values.contract.bytecode | quote }}

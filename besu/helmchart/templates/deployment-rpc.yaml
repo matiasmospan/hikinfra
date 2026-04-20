@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hik-besu.fullname" . }}-rpc
+  labels:
+    {{- include "hik-besu.labels" . | nindent 4 }}
+    layer: rpc
+spec:
+  {{- if not .Values.rpcNodes.autoscaling.enabled }}
+  replicas: {{ .Values.rpcNodes.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: besu-rpc
+  template:
+    metadata:
+      labels:
+        app: besu-rpc
+    spec:
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000      # Usuario estándar de la imagen de Besu
+        runAsGroup: 1000
+        fsGroup: 1000        # Fuerza a que los PVCs tengan permisos para este usuario
+        seccompProfile:
+          type: RuntimeDefault # Bloquea llamadas al kernel no esenciales
+      initContainers:
+      - name: init-genesis
+        image: alpine:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Los nodos RPC solo necesitan el genesis y la lista de validadores (static-nodes)
+            cp /etc/besu-identity/genesis.json /opt/besu/genesis.json
+            cp /etc/besu-identity/static-nodes.json /opt/besu/data/static-nodes.json
+            echo "Nodo de lectura HIK listo para sincronizar."
+        volumeMounts:
+        - name: identity
+          mountPath: /etc/besu-identity/
+        - name: config-dir
+          mountPath: /opt/besu/
+        - name: data-dir
+          mountPath: /opt/besu/data
+        - name: tmp-dir
+          mountPath: /tmp
+
+      containers:
+      - name: besu-rpc
+        image: {{ .Values.rpcNodes.image }}
+        securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true # Evita que inyecten binarios maliciosos
+            capabilities:
+              drop:
+                - ALL # Quita permisos de red, chown, sys_admin, etc.
+        env:
+        - name: JAVA_OPTS
+          # -XX:+UseContainerSupport: Obliga a Java a respetar los límites del pod de K8s.
+          # -XX:MaxRAMPercentage=60.0: Reserva el 60% del límite para Java. El 40% queda para RocksDB.
+          value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:+HeapDumpOnOutOfMemoryError"
+        args: [
+          "--genesis-file=/opt/besu/genesis.json",
+          "--data-path=/opt/besu/data",
+          "--rpc-http-enabled",
+          "--rpc-http-api=ETH,NET,QBFT",
+          "--host-allowlist=*",
+          "--rpc-http-cors-origins=all",
+          "--sync-mode=FAST", # Sincronización rápida para nodos efímeros
+          "--Xdns-enabled=true",  
+          "--Xdns-update-enabled=true",
+          "--network-id=1337",
+          "--min-gas-price=0"
+        ]
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 8545
+          initialDelaySeconds: 60 # Tiempo para que la JVM levante
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 8545
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.rpcNodes.resources | nindent 10 }}
+        ports:
+        - name: rpc
+          containerPort: 8545
+        volumeMounts:
+        - name: config-dir
+          mountPath: /opt/besu/genesis.json
+          subPath: genesis.json
+        - name: data-dir
+          mountPath: /opt/besu/data
+        - name: tmp-dir
+          mountPath: /tmp
+
+      volumes:
+      - name: identity
+        secret:
+          secretName: besu-deployer-key
+      - name: config-dir
+        emptyDir: {}
+      - name: data-dir
+        emptyDir: {} # Los nodos de lectura son efímeros
+      - name: tmp-dir
+        emptyDir: {}

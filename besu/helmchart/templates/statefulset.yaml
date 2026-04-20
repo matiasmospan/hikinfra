@@ -1,0 +1,169 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hik-besu-validator
+spec:
+  serviceName: besu-internal
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      app: besu-validator
+  template:
+    metadata:
+      labels:
+        app: besu-validator
+    spec:
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000      # Usuario estándar de la imagen de Besu
+        runAsGroup: 1000
+        fsGroup: 1000        # Fuerza a que los PVCs tengan permisos para este usuario
+        seccompProfile:
+          type: RuntimeDefault # Bloquea llamadas al kernel no esenciales
+      {{- with .Values.nodes.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.nodes.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity: 
+        podAntiAffinity:
+          # OPCIÓN "SOFT" (Recomendada si no sabés cuántos nodos físicos tenés):
+          # K8s "intentará" separarlos. Si no tiene suficientes servidores físicos, 
+          # los juntará para que no queden apagados (Pending).
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - besu-validator # <-- Cambiá esto si tu label es diferente
+              topologyKey: "kubernetes.io/hostname"
+      initContainers:
+      - name: init-genesis
+        image: alpine:latest
+        securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true # Evita que inyecten binarios maliciosos
+            capabilities:
+              drop:
+                - ALL # Quita permisos de red, chown, sys_admin, etc.
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Copiar génesis y mapa de red al volumen de datos
+            cp /etc/besu-identity/genesis.json /opt/besu/genesis.json
+            cp /etc/besu-identity/static-nodes.json /opt/besu/data/static-nodes.json
+            
+            # Identificar pod y copiar su llave privada correspondiente
+            POD_INDEX=$(hostname | rev | cut -d- -f1 | rev)
+            cp /etc/besu-identity/val$POD_INDEX /opt/besu/key
+            echo "Identidad y red para validador $POD_INDEX lista."
+        volumeMounts:
+        - name: identity
+          mountPath: /etc/besu-identity/
+        - name: genesis-fixed
+          mountPath: /opt/besu/
+        - name: data
+          mountPath: /opt/besu/data
+        - name: tmp-dir
+          mountPath: /tmp
+
+      containers:
+      - name: besu
+        image: {{ .Values.nodes.image }}
+        securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true # Evita que inyecten binarios maliciosos
+            capabilities:
+              drop:
+                - ALL # Quita permisos de red, chown, sys_admin, etc.
+        args: [
+          "--genesis-file=/opt/besu/genesis.json",
+          "--data-path=/opt/besu/data",
+          "--node-private-key-file=/opt/besu/key",
+          "--rpc-http-enabled",
+          "--rpc-http-api=ETH,NET,QBFT",
+          "--host-allowlist=*",
+          "--rpc-http-cors-origins=all",
+          "--Xdns-enabled=true",  
+          "--Xdns-update-enabled=true",
+          "--network-id=1337",
+          "--min-gas-price=0"
+        ]
+        env:
+        - name: JAVA_OPTS
+          # -XX:+UseContainerSupport: Obliga a Java a respetar los límites del pod de K8s.
+          # -XX:MaxRAMPercentage=60.0: Reserva el 60% del límite para Java. El 40% queda para RocksDB.
+          value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:+HeapDumpOnOutOfMemoryError"
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 8545
+          initialDelaySeconds: 60 # Tiempo para que la JVM levante
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 8545
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "2Gi"
+          limits:
+            cpu: "1000m"
+            memory: "4Gi"    
+        ports:
+        - name: json-rpc
+          containerPort: 8545
+        - name: p2p-tcp
+          containerPort: 30303
+        - name: p2p-udp
+          containerPort: 30303
+          protocol: UDP
+        volumeMounts:
+        - name: tmp-dir
+          mountPath: /tmp
+        - name: data
+          mountPath: /opt/besu/data
+        - name: genesis-fixed
+          mountPath: /opt/besu/genesis.json
+          subPath: genesis.json
+        - name: genesis-fixed
+          mountPath: /opt/besu/key
+          subPath: key
+      volumes:
+      - name: identity
+        secret:
+          secretName: besu-deployer-key
+      - name: genesis-fixed
+        emptyDir: {}
+      - name: tmp-dir
+        emptyDir: {}
+
+# DEBE SER PLURAL
+  volumeClaimTemplates: 
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- if .Values.storage.className }}
+      storageClassName: {{ .Values.storage.className }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.storage.size | default "50Gi" }}

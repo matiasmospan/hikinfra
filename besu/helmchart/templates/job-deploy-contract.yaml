@@ -1,0 +1,109 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hik-besu-contract-deployer
+spec:
+  template:
+    metadata:
+      labels:
+        app: hik-contract-deployer
+        access-rpc: "true" # <--- Sin esto, el Job dará 'Connection Refused'
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: hik-besu-deployer-sa
+      restartPolicy: OnFailure
+      containers:
+      - name: deployer
+        image: alpine:latest
+        securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL # Quita permisos de red, chown, sys_admin, etc.
+        env:
+        - name: PRIV_KEY
+          valueFrom:
+            secretKeyRef:
+              name: besu-deployer-key
+              key: key
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Detener la ejecución si algún comando falla
+            set -e 
+
+            apk add --no-cache curl nodejs npm
+            cd /tmp
+            npm install ethers@5.7.2 --no-fund --no-audit
+
+            echo "==============================================="
+            echo "Esperando a que la capa RPC de HIK esté lista..."
+            echo "==============================================="
+            
+            # Bucle de espera: Pide el net_version hasta recibir respuesta
+            while ! curl -s -m 2 -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' http://besu-rpc-service:8545 | grep -q "jsonrpc"; do
+              echo "El nodo RPC aún no responde. Reintentando en 5 segundos..."
+              sleep 5
+            done
+            
+            echo "¡Nodo RPC detectado! Arrancando despliegue de HIKRegistry..."
+
+            node -e "
+            const { ethers } = require('ethers');
+            const fs = require('fs');
+
+            async function main() {
+              try {
+                const ABI = JSON.parse(fs.readFileSync('/opt/contracts/abi.json', 'utf8'));
+                const BYTECODE = fs.readFileSync('/opt/contracts/bytecode.txt', 'utf8').trim();
+
+                const provider = new ethers.providers.StaticJsonRpcProvider('http://besu-rpc-service:8545', 1337);
+                const wallet = new ethers.Wallet(process.env.PRIV_KEY, provider);
+                
+                console.log('Deployer:', wallet.address);
+
+                if (BYTECODE === '0x' || BYTECODE === '') {
+                    console.log('MODO STANDBY: No se detectó bytecode real.');
+                    fs.writeFileSync('/tmp/address.txt', '0x0000000000000000000000000000000000PENDING');
+                    process.exit(0);
+                }
+                
+                console.log('Artefactos detectados. Iniciando transacción...');
+                const factory = new ethers.ContractFactory(ABI, BYTECODE, wallet);
+                const contract = await factory.deploy({ gasPrice: 0, gasLimit: 8000000 });
+                
+                console.log('Esperando confirmación en la blockchain...');
+                await contract.deployTransaction.wait();
+
+                console.log('CONTRATO DESPLEGADO: ' + contract.address);
+                fs.writeFileSync('/tmp/address.txt', contract.address);
+              } catch (e) {
+                console.error('Error fatal en ejecución:', e);
+                process.exit(1);
+              }
+            }
+            main();"
+
+            CONTRACT_ADDRESS=$(cat /tmp/address.txt)
+            
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl && mv kubectl /usr/local/bin/
+
+            kubectl delete configmap hik-contract-config -n besu --ignore-not-found
+            kubectl create configmap hik-contract-config -n besu --from-literal=REGISTRY_ADDRESS=$CONTRACT_ADDRESS
+            
+            echo "Estado de red actualizado con éxito."
+        volumeMounts:
+        - name: tmp-dir
+          mountPath: /tmp
+        - name: contract-artifacts
+          mountPath: /opt/contracts
+          
+      volumes:
+      - name: contract-artifacts
+        configMap:
+          name: hik-contract-artifacts
+      - name: tmp-dir
+        emptyDir: {}

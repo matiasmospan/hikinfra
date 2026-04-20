@@ -1,0 +1,125 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hik-besu-keygen
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-10"
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 1000
+      serviceAccountName: hik-besu-keygen-sa
+      restartPolicy: OnFailure
+      
+      initContainers:
+      - name: besu-generator
+        image: {{ .Values.rpcNodes.image }}
+        securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL # Quita permisos de red, chown, sys_admin, etc.
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            cat <<EOF > /tmp/qbft.json
+            {
+              "genesis": {
+                "config": {
+                  "chainId": 1337,
+                  "homesteadBlock": 0,
+                  "eip150Block": 0,
+                  "eip155Block": 0,
+                  "eip158Block": 0,
+                  "byzantiumBlock": 0,
+                  "zeroBaseFee": true,
+                  "constantinopleBlock": 0,
+                  "petersburgBlock": 0,
+                  "istanbulBlock": 0,
+                  "berlinBlock": 0,
+                  "londonBlock": 0,
+                  "parisBlock": 0,
+                  "qbft": { "blockperiodseconds": 2, "epochlength": 30000, "requesttimeoutseconds": 4 }
+                },
+                "gasLimit": "0x1fffffffffffff",
+                "difficulty": "0x1",
+                "coinbase": "0x0000000000000000000000000000000000000000"
+              },
+              "blockchain": { "nodes": { "generate": true, "count": 3 } }
+            }
+            EOF
+            besu operator generate-blockchain-config --config-file=/tmp/qbft.json --to=/shared/network --private-key-file-name=key
+        volumeMounts:
+        - name: shared-data
+          mountPath: /shared
+        - name: tmp-dir
+          mountPath: /tmp
+
+      containers:
+      - name: publisher
+        image: alpine:latest
+        securityContext:
+            allowPrivilegeEscalation: false
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            apk add --no-cache curl openssl nodejs npm jq
+            cd /tmp
+
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl && mv kubectl /usr/local/bin/
+            
+            # 1. Generar identidad del Deployer
+            PRIV_KEY=$(openssl ecparam -name secp256k1 -genkey -noout -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32)
+            npm install ethers@5.7.2 --no-fund --no-audit
+            PUB_ADDR=$(node -e "const { ethers } = require('ethers'); const wallet = new ethers.Wallet('$PRIV_KEY'); console.log(wallet.address)")
+
+            # 2. Inyectar fondos en el génesis
+            jq ".alloc += {\"$PUB_ADDR\": {\"balance\": \"0x200000000000000000000000000000000000000000000000000000000000000\"}}" /shared/network/genesis.json > /shared/network/genesis_final.json
+
+            ##############################
+            # PUB_ADDR : $PUB_ADDR
+            ##############################
+
+            # 3. Capturar rutas de llaves (compatibilidad Alpine)
+            set -- $(find /shared/network/keys -name "key" | sort)
+
+            # 4. Construir static-nodes.json usando DNS interno de Kubernetes
+            PUB0=$(cat $(dirname $1)/key.pub | sed 's/^0x//' | tr -d '\n\r')
+            PUB1=$(cat $(dirname $2)/key.pub | sed 's/^0x//' | tr -d '\n\r')
+            PUB2=$(cat $(dirname $3)/key.pub | sed 's/^0x//' | tr -d '\n\r')
+
+            cat <<EOF > /shared/network/static-nodes.json
+            [
+              "enode://$PUB0@hik-besu-validator-0.besu-internal.besu.svc.cluster.local:30303",
+              "enode://$PUB1@hik-besu-validator-1.besu-internal.besu.svc.cluster.local:30303",
+              "enode://$PUB2@hik-besu-validator-2.besu-internal.besu.svc.cluster.local:30303"
+            ]
+            EOF
+
+            # 5. Publicar el Secret unificado
+            kubectl create secret generic besu-deployer-key \
+              --from-literal=key=0x$PRIV_KEY \
+              --from-literal=address=$PUB_ADDR \
+              --from-file=genesis.json=/shared/network/genesis_final.json \
+              --from-file=static-nodes.json=/shared/network/static-nodes.json \
+              --from-file=val0=$1 \
+              --from-file=val1=$2 \
+              --from-file=val2=$3
+              
+            echo "Identidad y Mapa de Red creados exitosamente."
+        volumeMounts:
+        - name: shared-data
+          mountPath: /shared
+        - name: tmp-dir
+          mountPath: /tmp
+          
+      volumes:
+      - name: shared-data
+        emptyDir: {}
+      - name: tmp-dir
+        emptyDir: {}

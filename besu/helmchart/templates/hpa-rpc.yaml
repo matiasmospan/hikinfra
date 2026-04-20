@@ -1,0 +1,20 @@
+{{- if .Values.rpcNodes.autoscaling.enabled }}
+apiVersion: initialization.k8s.io/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "hik-besu.fullname" . }}-rpc-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "hik-besu.fullname" . }}-rpc
+  minReplicas: {{ .Values.rpcNodes.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.rpcNodes.autoscaling.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.rpcNodes.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
