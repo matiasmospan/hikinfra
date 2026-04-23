@@ -23,7 +23,18 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       # ---------------------------------------------------------
-      
+      # --- LA REGLA DE ANTI-AFINIDAD PARA ALTA DISPONIBILIDAD REAL ---
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - hik-ipfs
+            topologyKey: kubernetes.io/hostname
+      # --------------------------------------------------------------
       containers:
       # --- CONTENEDOR 1: KUBO (IPFS BASE) ---
       - name: kubo
