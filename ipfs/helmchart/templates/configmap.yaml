@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hik-ipfs-config
+data:
+  # Script para configurar Kubo (IPFS base)
+  01-config-ip.sh: |
+    #!/bin/sh
+    ipfs config --json Addresses.Announce '["/ip4/'$POD_IP'/tcp/4001"]'
+    ipfs config --json Addresses.API '"/ip4/0.0.0.0/tcp/5001"'
+    ipfs config --json Addresses.Gateway '"/ip4/0.0.0.0/tcp/8080"'
+
+  # Script para configurar y unir IPFS Cluster Peer
+  entrypoint.sh: |
+    #!/bin/sh
+    set -e
+    
+    # 1. Esperamos a que la API de Kubo local esté lista
+    until nc -z 127.0.0.1 5001; do
+      echo "⏳ Esperando a Kubo..."
+      sleep 2
+    done
+
+    # 2. Inicializamos el Cluster en modo CRDT si es la primera vez
+    if [ ! -f "/data/ipfs-cluster/service.json" ]; then
+      echo "🏗️ Inicializando Cluster CRDT..."
+      ipfs-cluster-service init --consensus crdt
+    fi
+
+    # 3. Limpiamos locks residuales por reinicios abruptos de Pods
+    rm -f /data/ipfs-cluster/cluster.lock
+
+    # 4. Lógica de Autodescubrimiento y Unión
+    if [ "$CLUSTER_PEERNAME" = "hik-ipfs-0" ]; then
+      echo "👑 Nodo 0: Iniciando servicio base (Líder inicial)..."
+      exec ipfs-cluster-service daemon
+    else
+      echo "🔍 Buscando al Nodo 0 en la red interna..."
+      
+      # Usamos POD_NAMESPACE dinámico para apuntar a la API HTTP del Nodo 0
+      NODE0_API="/dns4/hik-ipfs-0.hik-ipfs-headless.${POD_NAMESPACE}.svc.cluster.local/tcp/9094"
+      
+      until ipfs-cluster-ctl --host "$NODE0_API" id > /dev/null 2>&1; do
+        echo "⏳ Nodo 0 no está listo aún. Reintentando en 3s..."
+        sleep 3
+      done
+
+      # Extraemos limpiamente solo el ID de LibP2P
+      NODO0_ID=$(ipfs-cluster-ctl --host "$NODE0_API" id | head -n 1 | awk '{print $1}')
+      echo "✅ ID del Nodo 0 descubierto exitosamente: $NODO0_ID"
+
+      # Construimos la multi-address completa
+      BOOTSTRAP_ADDR="/dns4/hik-ipfs-0.hik-ipfs-headless.${POD_NAMESPACE}.svc.cluster.local/tcp/9096/p2p/$NODO0_ID"
+
+      echo "🔗 Uniendo el clúster a $BOOTSTRAP_ADDR"
+      exec ipfs-cluster-service daemon --bootstrap "$BOOTSTRAP_ADDR"
+    fi

@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hik-ipfs
+spec:
+  serviceName: "hik-ipfs-headless"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hik-ipfs
+  template:
+    metadata:
+      labels:
+        app: hik-ipfs
+    spec:
+      # --- Reglas de Higiene de Infraestructura (Scheduling) ---
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # ---------------------------------------------------------
+      
+      containers:
+      # --- CONTENEDOR 1: KUBO (IPFS BASE) ---
+      - name: kubo
+        image: ipfs/kubo:v0.20.0
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        ports:
+        - containerPort: 4001
+          name: swarm
+        - containerPort: 5001
+          name: api
+        - containerPort: 8080
+          name: gateway
+        volumeMounts:
+        - name: ipfs-storage
+          mountPath: /data/ipfs
+        - name: config-volume
+          mountPath: /custom
+
+      # --- CONTENEDOR 2: IPFS CLUSTER PEER (ORQUESTADOR) ---
+      - name: cluster-peer
+        image: ipfs/ipfs-cluster:v1.1.0
+        env:
+        # El nombre del Pod, vital para que el Nodo 0 sepa que es el Nodo 0
+        - name: CLUSTER_PEERNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        # El Namespace dinámico para resolver DNS
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        # El secreto compartido de la red (generado por libp2p-key)
+        - name: CLUSTER_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: hik-ipfs-secret
+              key: cluster-secret
+        # Habilita que la API HTTP escuche en la IP del Pod (no solo localhost)
+        - name: CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS
+          value: "/ip4/0.0.0.0/tcp/9094"
+        # Apunta a la API de Kubo en el contenedor de al lado (localhost dentro del Pod)
+        - name: CLUSTER_IPFSHTTP_NODEMULTIADDR
+          value: "/ip4/127.0.0.1/tcp/5001"
+        # Permite que todos los nodos aprueben pins
+        - name: CLUSTER_CRDT_TRUSTALL
+          value: "true"
+        command: ["/bin/sh", "/custom/entrypoint.sh"]
+        ports:
+        - containerPort: 9094
+          name: cluster-api
+        - containerPort: 9096
+          name: cluster-swarm
+        volumeMounts:
+        - name: cluster-storage
+          mountPath: /data/ipfs-cluster
+        - name: config-volume
+          mountPath: /custom
+
+      # --- VOLÚMENES ---
+      volumes:
+      - name: config-volume
+        configMap:
+          name: hik-ipfs-config
+          defaultMode: 0777
+
+  # --- ALMACENAMIENTO PERSISTENTE ---
+  volumeClaimTemplates:
+  - metadata:
+      name: ipfs-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 20Gi # Ajustable en Values
+  - metadata:
+      name: cluster-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi # Ajustable en Values

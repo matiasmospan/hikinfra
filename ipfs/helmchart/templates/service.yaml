@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hik-ipfs-headless
+  labels:
+    app: hik-ipfs
+spec:
+  clusterIP: None
+  selector:
+    app: hik-ipfs
+  ports:
+  - name: swarm
+    port: 4001
+    targetPort: 4001
+  - name: cluster-swarm
+    port: 9096
+    targetPort: 9096
+  - name: cluster-api # <--- EL PUERTO QUE FALTABA
+    port: 9094
+    targetPort: 9094
+  - name: ipfs-api
+    port: 5001
+    targetPort: 5001

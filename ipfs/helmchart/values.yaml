@@ -1,0 +1,22 @@
+cluster:
+  replicaCount: 3
+  secret: "hik-ipfs-cluster-secret" # Debe contener el CLUSTER_SECRET para el enjambre
+
+# Configuración de los nodos IPFS (Kubo)
+ipfs:
+  image: ipfs/kubo:v0.27.0
+  storage:
+    size: 100Gi
+    className: "premium-rwo" # SSD recomendado para performance extrema en HIK
+
+# Configuración del Peer de Cluster
+peer:
+  image: ipfs/ipfs-cluster:latest
+
+# Aislamiento y Resiliencia (Opcional)
+nodes:
+  nodeSelector: {}
+  tolerations: []
+  # Anti-afinidad activada por defecto para HA
+  podAntiAffinity:
+    type: hard # Evita que dos nodos vivan en el mismo host físico

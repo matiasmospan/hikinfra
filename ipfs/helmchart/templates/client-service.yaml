@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hik-ipfs-client
+  labels:
+    app: hik-ipfs
+spec:
+  type: ClusterIP # Esto crea una IP virtual única balanceada
+  selector:
+    app: hik-ipfs
+  ports:
+  # 1. Para LEER documentos (El Human Source)
+  - name: gateway
+    port: 8080
+    targetPort: 8080
+  # 2. Para GUARDAR/PINNEAR documentos replicados (API del Cluster)
+  - name: cluster-api
+    port: 9094
+    targetPort: 9094
+  # 3. Para uso directo de Kubo (Opcional, pero útil para debug)
+  - name: ipfs-api
+    port: 5001
+    targetPort: 5001
