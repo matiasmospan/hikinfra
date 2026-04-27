@@ -16,11 +16,12 @@ spec:
     spec:
       containers:
       - name: besu
-        image: hyperledger/besu:latest
+        image: hyperledger/besu:25.12.0
         command: ["/bin/sh", "-c"]
         args:
           - |
             besu --data-path=/var/lib/besu \
+            --version-compatibility-protection=false \
             --genesis-file=/etc/besu/genesis.json \
             --rpc-http-enabled \
             --rpc-http-host=0.0.0.0 \
