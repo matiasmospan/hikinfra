@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-ipfs-access
+  namespace: {{ .Values.global.namespaces.ipfs }}
+spec:
+  replicas: 2 # Escalable según demanda
+  selector:
+    matchLabels:
+      app: hik-ipfs
+      role: access
+  template:
+    metadata:
+      labels:
+        app: hik-ipfs
+        role: access
+    spec:
+      {{- with .Values.access.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.access.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      # Forzamos que los nodos de acceso no se amontonen en el mismo worker si es posible
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  role: access
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: kubo
+        image: ipfs/kubo:v0.20.0
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 8080
+          name: gateway
+        command: ["/bin/sh", "/custom/access-entrypoint.sh"]
+        volumeMounts:
+        - name: config-volume
+          mountPath: /custom
+      volumes:
+      - name: config-volume
+        configMap:
+          name: hik-ipfs-config

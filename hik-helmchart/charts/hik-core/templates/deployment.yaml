@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-sidecar
+  labels:
+    app: hik-sidecar
+    tier: application
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: hik-sidecar
+  template:
+    metadata:
+      labels:
+        app: hik-sidecar
+        tier: application
+    spec:
+      initContainers:
+      - name: wait-for-contract
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Buscando contrato en namespace: {{ .Values.global.namespaces.besu }}..."
+          # 🎯 Usamos la variable global para el comando kubectl
+          until kubectl get configmap hik-contract-config -n {{ .Values.global.namespaces.besu }}; do
+            sleep 5
+          done
+          echo "¡Contrato desplegado! Arrancando HIK Core..."
+      containers:
+      - name: sidecar
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8080
+          name: http
+        
+        # Inyectamos TANTO la configuración como los secretos
+        envFrom:
+        - configMapRef:
+            name: hik-core-config
+        - secretRef:
+            name: hik-wallet-keys
+        
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}

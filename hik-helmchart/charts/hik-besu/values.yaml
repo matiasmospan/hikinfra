@@ -1,0 +1,48 @@
+global:
+  networkId: 1337
+
+nodes:
+  replicaCount: 3
+  image: hyperledger/besu:23.4.0
+  blockTime: 2
+  storage:
+    size: 50Gi
+    class: premium-rwo
+  # Opcionales: Si se comentan o borran, Besu corre en cualquier nodo disponible
+  nodeSelector:
+    app: besu
+  tolerations:
+    - key: "app"
+      operator: "Equal"
+      value: "besu"
+      effect: "NoSchedule"
+
+contract:
+  deploy: true
+  # Pegá el array JSON del ABI aquí
+  abi: |
+    [...]
+  
+  # Pegá el string hexadecimal del Bytecode aquí (empezando con 0x)
+  bytecode: "0x..."
+
+# CAPA 2: Nodos de Lectura/RPC (Auto-escalables)
+rpcNodes:
+  enabled: true
+  replicaCount: 1
+  image: hyperledger/besu:23.4.0
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+storage:
+  # Si se deja vacío (""), K8s usará el StorageClass por defecto del clúster (agnóstico)
+  className: "premium-rwo"
+  size: 50Gi

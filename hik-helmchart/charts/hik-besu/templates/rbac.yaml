@@ -5,7 +5,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: hik-besu-{{ $job }}-sa
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ .Values.global.namespaces.besu }}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-20"
@@ -14,7 +14,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: hik-besu-{{ $job }}-role
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ .Values.global.namespaces.besu }}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-20"
@@ -28,14 +28,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: hik-besu-{{ $job }}-binding
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ .Values.global.namespaces.besu }}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-20"
 subjects:
 - kind: ServiceAccount
   name: hik-besu-{{ $job }}-sa
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ .Values.global.namespaces.besu }}
 roleRef:
   kind: Role
   name: hik-besu-{{ $job }}-role

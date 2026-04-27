@@ -1,0 +1,46 @@
+# Aislamiento de la Capa de Datos
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ipfs-data-shield
+  namespace: {{ .Values.global.namespaces.ipfs }}
+spec:
+  podSelector:
+    matchLabels:
+      role: data # Solo afecta a los nodos con discos
+  ingress:
+  # 1. Los nodos de datos hablan entre ellos (Replicación)
+  - from:
+    - podSelector:
+        matchLabels:
+          role: data
+    ports:
+    - port: 4001
+    - port: 9096
+    - port: 9094
+  # 2. Los nodos de ACCESO pueden entrar a pedir datos (Lectura)
+  - from:
+    - podSelector:
+        matchLabels:
+          role: access
+    ports:
+    - port: 4001 # Swarm P2P
+---
+# Aislamiento de la Capa de Acceso
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ipfs-access-shield
+  namespace: {{ .Values.global.namespaces.ipfs }}
+spec:
+  podSelector:
+    matchLabels:
+      role: access
+  ingress:
+  # SOLO la aplicación HIK puede entrar al Gateway
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: access # Label que debe tener tu Backend/App
+    ports:
+    - port: 8080

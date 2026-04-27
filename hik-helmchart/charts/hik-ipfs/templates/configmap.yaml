@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: hik-ipfs-config
+  namespace: {{ .Values.global.namespaces.ipfs }}
 data:
   # Script para configurar Kubo (IPFS base)
   01-config-ip.sh: |
@@ -55,3 +56,44 @@ data:
       echo "🔗 Uniendo el clúster a $BOOTSTRAP_ADDR"
       exec ipfs-cluster-service daemon --bootstrap "$BOOTSTRAP_ADDR"
     fi
+
+# Script para Nodos de Acceso (Gateways)
+  access-entrypoint.sh: |
+    #!/bin/sh
+    set -e
+
+    # 1. Inicializar con perfil de servidor
+    if [ ! -f "$IPFS_PATH/config" ]; then
+      ipfs init --profile server
+    fi
+
+    # 2. Configuración de Performance Extrema
+    ipfs config --json Datastore.StorageMax '"10GB"'
+    ipfs config --json Swarm.ConnMgr.HighWater 100
+    ipfs config --json Swarm.ConnMgr.LowWater 50
+    # Desactivamos el reproviding innecesario para ahorrar ancho de banda
+    ipfs config --json Reprovider.Strategy '"pinned"'
+
+    # 3. Descubrimiento Dinámico del Nodo de Datos 0
+    echo "🔍 Buscando la identidad del clúster de datos..."
+    NODE0_DATA_API="/dns4/hik-ipfs-0.hik-ipfs-headless.${POD_NAMESPACE}.svc.cluster.local/tcp/9094"
+    
+    # Esperamos a que la API de datos responda
+    until ipfs-cluster-ctl --host "$NODE0_API" id > /dev/null 2>&1; do
+      echo "⏳ Esperando al Cluster de Datos..."
+      sleep 5
+    done
+
+    # Obtenemos el ID de Kubo (no el del cluster) del Nodo 0
+    # El comando 'id' del cluster también nos da las direcciones de Kubo asociadas
+    KUBO_NODE0_ID=$(ipfs-cluster-ctl --host "$NODE0_DATA_API" id | grep "IPFS:" | awk '{print $2}' | head -n 1)
+    
+    # 4. Configurar Peering (Conexión Permanente)
+    # Esto asegura que el Gateway siempre esté pegado a los datos
+    DATA_ADDR="/dns4/hik-ipfs-0.hik-ipfs-headless.${POD_NAMESPACE}.svc.cluster.local/tcp/4001/p2p/$KUBO_NODE0_ID"
+    ipfs config --json Peering.Peers "[{\"ID\": \"$KUBO_NODE0_ID\", \"Addrs\": [\"$DATA_ADDR\"]}]"
+    
+    echo "🔗 Peering configurado con Nodo de Datos: $KUBO_NODE0_ID"
+
+    # 5. Arrancar Daemon
+    exec ipfs daemon

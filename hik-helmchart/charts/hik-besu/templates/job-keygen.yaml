@@ -2,6 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: hik-besu-keygen
+  namespace: {{ .Values.global.namespaces.besu }}
   annotations:
     "helm.sh/hook": pre-install
     "helm.sh/hook-weight": "-10"

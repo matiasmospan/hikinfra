@@ -1,0 +1,51 @@
+# Configuración del contenedor
+image:
+  repository: us-east1-docker.pkg.dev/matech-476914/hik-repo/humaniskind
+  tag: "gov4.0"
+  pullPolicy: Always
+
+replicaCount: 1
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "500m"
+
+# --- 🔌 CONEXIONES (Se pueden sobrescribir desde el Meta-Chart) ---
+dependencies:
+  # Apuntamos al servicio RPC de la capa de datos
+  besuRpcUrl: "http://hik-besu-rpc:8545"
+  # Apuntamos a la API de escritura del cluster IPFS
+  ipfsClusterUrl: "http://hik-ipfs-client:9094"
+  # Apuntamos a la API del gateway stateless que armamos ayer
+  ipfsKuboUrl: "http://hik-ipfs-access:5001"
+  # Los sidecars que sumaremos después
+  slmEndpoint: "http://ollama-service:11434"
+  embeddingEndpoint: "http://embedding-sidecar-service:8000"
+
+# --- ⚙️ CONFIGURACIÓN DEL SISTEMA ---
+config:
+  chainId: "1337"
+  contractAddress: "0x87F1FB34BdceB9f68462EA3eC0D94d719fe9b776"
+  gasPrice: "1000000000"
+  gasLimit: "500000"
+  evmGasLimit: "500000"
+  anchorGasLimit: "500000"
+  l2TimeoutMs: "1500"
+  l3TimeoutMs: "50000"
+  ollamaModel: "qwen2.5:0.5b"
+
+# --- 🔐 SECRETOS REALES ---
+secrets:
+  # Esto debería inyectarse desde el CI/CD o un Vault, no commitearse en GitHub
+  privateKey: "" 
+  pubKey: ""
+
+# --- 🌐 EXPOSICIÓN (Gateway / Ingress) ---
+ingress:
+  enabled: true
+  className: "nginx" # O el nombre de tu Gateway Class
+  host: "api.humaniskind.com"

@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-cross-ns-reader
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-core-besu-read
+  # 🎯 Dinámico: Se instala en el namespace de Besu
+  namespace: {{ .Values.global.namespaces.besu }} 
+subjects:
+- kind: ServiceAccount
+  name: hik-core-sa
+  # 🎯 Dinámico: Autoriza al ServiceAccount que vive en el namespace del Core
+  namespace: {{ .Values.global.namespaces.core }} 
+roleRef:
+  kind: ClusterRole
+  name: {{ .Release.Name }}-cross-ns-reader
+  apiGroup: rbac.authorization.k8s.io

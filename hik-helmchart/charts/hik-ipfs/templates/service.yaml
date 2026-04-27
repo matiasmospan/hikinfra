@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: hik-ipfs-headless
+  namespace: {{ .Values.global.namespaces.ipfs }}
   labels:
     app: hik-ipfs
 spec:

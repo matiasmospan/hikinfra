@@ -1,0 +1,21 @@
+apiVersion: v2
+name: human-is-kind
+description: Meta-chart para el despliegue completo de la infraestructura HIK
+type: application
+version: 1.0.0
+appVersion: "2.0.0"
+
+dependencies:
+  - name: hik-besu
+    version: "1.0.0"
+    repository: "file://./charts/hik-besu" # Referencia local
+  - name: hik-ipfs
+    version: "1.0.0"
+    repository: "file://./charts/hik-ipfs"
+  - name: hik-core
+    version: "1.0.0"
+    repository: "file://./charts/hik-core"
+  - name: nginx-gateway-fabric
+    version: "1.2.0"
+    repository: "https://helm.nginx.com/stable"
+    condition: nginx-gateway-fabric.enabled

@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: hik-ipfs
+  namespace: {{ .Values.global.namespaces.ipfs }}
 spec:
   serviceName: "hik-ipfs-headless"
   replicas: 3

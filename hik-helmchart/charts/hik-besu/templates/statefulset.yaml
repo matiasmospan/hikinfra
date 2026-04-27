@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: hik-besu-validator
+  namespace: {{ .Values.global.namespaces.besu }}
 spec:
   serviceName: besu-internal
   podManagementPolicy: Parallel

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hik-svc
+spec:
+  type: ClusterIP # 🔒 Cerrado al mundo exterior
+  selector:
+    app: hik-sidecar
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http

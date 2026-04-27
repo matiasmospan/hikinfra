@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hik-core
+description: API y motor principal (Stateless) de Human Is Kind
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
