@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: hik
+data:
+  MONGO_URI: "mongodb://root:F83wJXfA4t@hik-mongodb:27017/hik_dashboard?authSource=admin"
+  MONGO_TLS: "false"

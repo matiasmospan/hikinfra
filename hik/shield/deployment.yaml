@@ -1,0 +1,57 @@
+# HIK v4 — hik-shield Deployment (updated)
+#
+# Changes from previous version:
+#   - Removed slm-auditor (Ollama) container from this pod
+#   - Ollama now lives in ollama-deployment.yaml (independent scaling)
+#   - hik-shield pod is now ~256Mi, HPA-eligible
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-shield
+  namespace: hik
+  labels:
+    app: hik-shield
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hik-shield
+  template:
+    metadata:
+      labels:
+        app: hik-shield
+    spec:
+      containers:
+      - name: shield
+        image: us-east1-docker.pkg.dev/matech-476914/hik-repo/humaniskind-shield:gov4.0
+        env:
+        - name: HIK_SHIELD_LISTEN
+          value: ":8080"
+        - name: HIK_UPSTREAM_URL
+          value: "https://httpbin.org/post"
+        - name: HIK_REDIS_ADDR
+          value: "redis:6379"
+        - name: HIK_SIDECAR_URL
+          value: "http://hik-svc:8080"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"

@@ -37,7 +37,7 @@ spec:
             until ollama list >/dev/null 2>&1; do sleep 1; done
             
             # 3. Descargar el modelo
-            echo "Pulling model qwen3.5:4b..."
+            echo "Pulling model qwen2.5:0.5b..."
             ollama pull qwen2.5:0.5b
             
             # 4. FORZAR CARGA EN RAM

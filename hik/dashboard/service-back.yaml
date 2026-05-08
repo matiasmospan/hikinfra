@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hik-dashboard-backend-svc
+  namespace: hik
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: dashboard-backend

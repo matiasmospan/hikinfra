@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-dashboard-frontend
+  namespace: hik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard-frontend
+  template:
+    metadata:
+      labels:
+        app: dashboard-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: us-east1-docker.pkg.dev/matech-476914/hik-repo/humaniskind-dashboard:frontendv1.0
+        imagePullPolicy: Always
+        command: ["/bin/sh", "-c"]
+        # 'args' suele complementar, pero aquí pasamos todo el comando
+        args: 
+          - "exec nginx -g 'daemon off;'"
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+      volumes:
+      - name: config-volume
+        configMap:
+          name: nginx-config

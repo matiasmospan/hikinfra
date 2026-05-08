@@ -1,6 +1,6 @@
 apiVersion: v1
 kind: ConfigMap
-metadata:
+metadata: # ConfigMap para el template de index.html
   name: hik-explorer-html
   namespace: hik
 data:
@@ -11,7 +11,7 @@ data:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>HIK Governance Explorer - Registry V2</title>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
         <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="bg-slate-900 text-slate-100 min-h-screen p-8">
@@ -20,10 +20,11 @@ data:
             <header class="mb-8 border-b border-slate-700 pb-4 flex justify-between items-end">
                 <div>
                     <h1 class="text-2xl font-bold text-blue-400">HIK Governance Explorer</h1>
-                    <p class="text-slate-400 text-sm">Registry V2 Protocol - Auditoría en Tiempo Real</p>
+                    <p class="text-slate-400 text-sm">Registry V2 Protocol - <span id="contractDisplay" class="font-mono text-[10px] text-blue-500/70"></span></p>
                 </div>
-                <div id="connectionStatus" class="text-[10px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-slate-500 uppercase font-mono">
-                    RPC: Conectando...
+                <div class="flex gap-2 items-center">
+                    <span class="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-1 rounded border border-blue-500/30 font-mono">Seq: <span id="lastSeq">0</span></span>
+                    <div id="connectionStatus" class="text-[10px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-slate-500 uppercase font-mono">RPC: Conectando...</div>
                 </div>
             </header>
 
@@ -85,17 +86,19 @@ data:
         </div>
 
         <script>
-            const ADDR = "0x87F1FB34BdceB9f68462EA3eC0D94d719fe9b776";
+            const ADDR = "$HIK_CONTRACT_ADDRESS"; // Esta variable será inyectada por Nginx
             
             // Nueva ABI adaptada al contrato HIKRegistry
             const ABI = [
                 "function getBatch(bytes32 merkleRoot) external view returns (address signer, uint256 timestamp, string memory ipfsUri, uint32 policyVersion, uint16 violationCount, uint32 receiptCount)",
-                "function isAnchored(bytes32 merkleRoot) external view returns (bool)"
+                "function isAnchored(bytes32 merkleRoot) external view returns (bool)",
+                "function getLastAnchoredSeq() external view returns (uint256)"
             ];
 
             // Inicializar Provider
             const rpcUrl = window.location.origin + "/rpc";
-            const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+            document.getElementById('contractDisplay').innerText = ADDR; // Mostrar la dirección inyectada
+            let provider = new ethers.JsonRpcProvider(rpcUrl);
 
             async function checkBlockchain() {
                 const hashId = document.getElementById('hashId').value.trim();
@@ -115,11 +118,18 @@ data:
                 const contract = new ethers.Contract(ADDR, ABI, provider);
 
                 try {
+                    // Validación de seguridad: ¿Hay un contrato ahí?
+                    const code = await provider.getCode(ADDR);
+                    if (code === "0x") {
+                        alert("Error: No se detectó ningún contrato en la dirección configurada (" + ADDR + "). Verifica el despliegue.");
+                        return;
+                    }
+
                     // Primero verificamos si existe para evitar que la llamada falle
                     const anchored = await contract.isAnchored(hashId);
                     
                     if (!anchored) {
-                        alert("El Hash no se encuentra registrado en el Registry V2.");
+                        alert("El Hash " + hashId.substring(0,10) + "... no está registrado en este contrato.");
                         return;
                     }
 
@@ -127,15 +137,15 @@ data:
                     const batch = await contract.getBatch(hashId);
                     
                     // Mapeo de resultados
-                    document.getElementById('resTime').innerText = new Date(batch.timestamp * 1000).toUTCString();
+                    document.getElementById('resTime').innerText = new Date(Number(batch.timestamp) * 1000).toUTCString();
                     document.getElementById('resSigner').innerText = batch.signer;
-                    document.getElementById('resPolicy').innerText = batch.policyVersion;
-                    document.getElementById('resReceipts').innerText = batch.receiptCount;
-                    document.getElementById('resViolations').innerText = batch.violationCount;
+                    document.getElementById('resPolicy').innerText = batch.policyVersion.toString();
+                    document.getElementById('resReceipts').innerText = batch.receiptCount.toString();
+                    document.getElementById('resViolations').innerText = batch.violationCount.toString();
 
                     // Color de alerta para violaciones
                     const vCount = batch.violationCount;
-                    document.getElementById('resViolations').className = vCount > 0 
+                    document.getElementById('resViolations').className = vCount > 0n 
                         ? "text-lg font-bold text-red-400" 
                         : "text-lg font-bold text-green-400";
 
@@ -156,10 +166,21 @@ data:
                     statusMsg.classList.add('hidden');
                 }
             }
+            
+            async function updateStats() {
+                try {
+                    const contract = new ethers.Contract(ADDR, ABI, provider);
+                    const seq = await contract.getLastAnchoredSeq(); 
+                    document.getElementById('lastSeq').innerText = seq.toString();
+                } catch (e) { console.error("Stats Error:", e); }
+            }
 
             // Check de conexión inicial
             provider.getBlockNumber()
-                .then(() => document.getElementById('connectionStatus').innerText = "RPC: Online")
+                .then(() => {
+                    document.getElementById('connectionStatus').innerText = "RPC: Online";
+                    updateStats();
+                })
                 .catch(() => document.getElementById('connectionStatus').innerText = "RPC: Offline");
         </script>
     </body>
@@ -175,10 +196,14 @@ data:
     server {
         listen 80;
         server_name localhost;
+        
+        # Resolver para K8s DNS (necesario para servicios headless como besu-svc)
+        resolver 10.96.0.10 valid=5s;
 
         location / {
             root /usr/share/nginx/html;
             index index.html;
+            # Nginx servirá el index.html ya procesado por el entrypoint
         }
 
         # Proxy hacia el Gateway de IPFS (Kubo)
@@ -196,51 +221,3 @@ data:
             proxy_set_header X-Real-IP $remote_addr;
         }
     }
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: hik-explorer
-  namespace: hik
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: explorer
-  template:
-    metadata:
-      labels:
-        app: explorer
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - containerPort: 80
-        volumeMounts:
-        - name: html
-          mountPath: /usr/share/nginx/html/index.html
-          subPath: index.html
-        - name: config
-          mountPath: /etc/nginx/conf.d/default.conf
-          subPath: default.conf
-      volumes:
-      - name: html
-        configMap:
-          name: hik-explorer-html
-      - name: config
-        configMap:
-          name: hik-explorer-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: hik-explorer-svc
-  namespace: hik
-spec:
-  type: LoadBalancer # O NodePort si estás en una red interna
-  ports:
-  - port: 80
-    targetPort: 80
-  selector:
-    app: explorer

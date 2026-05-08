@@ -6,7 +6,6 @@ metadata:
   namespace: hik
   labels:
     app: embedding-sidecar
-    component: kmir-l2
 spec:
   type: ClusterIP   # Internal only — called by hik-sidecar, never exposed externally
   selector:

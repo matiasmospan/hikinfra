@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: minillm-server-service
+  namespace: hik
+  labels:
+    app: minillm-server
+spec:
+  type: ClusterIP   # Internal only — never exposed externally
+  selector:
+    app: minillm-server
+  ports:
+  - name: ollama-http
+    port: 11434
+    targetPort: 11434
+    protocol: TCP

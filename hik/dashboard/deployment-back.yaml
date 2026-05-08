@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hik-dashboard-backend
+  namespace: hik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard-backend
+  template:
+    metadata:
+      labels:
+        app: dashboard-backend
+    spec:
+      containers:
+      - name: backend
+        image: us-east1-docker.pkg.dev/matech-476914/hik-repo/humaniskind-dashboard:backendv1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: backend-config
